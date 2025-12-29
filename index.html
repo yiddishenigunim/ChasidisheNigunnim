@@ -651,15 +651,15 @@
             <div class="category-buttons">
                 <button class="category-btn btn-marshn" id="btn-marshn" onclick="startPlaying('marshn')">
                     <div class="play-icon">🎶</div>
-                    <div class="category-label">אלגעמיינע קאלעקשאן</div>
+                    <div class="category-label">אלגעמיינע<br>קאלעקשאן</div>
                 </button>
                 <button class="category-btn btn-lebedik" id="btn-lebedik" onclick="startPlaying('lebedik')">
                     <div class="play-icon">🎹</div>
-                    <div class="category-label">לעבעדיגע ניגונים</div>
+                    <div class="category-label">לעבעדיגע<br>ניגונים</div>
                 </button>
                 <button class="category-btn btn-shteyt" id="btn-shteyt" onclick="startPlaying('shteyt')">
                     <div class="play-icon">🎻</div>
-                    <div class="category-label">רואיגע<br>מוזיק</div>
+                    <div class="category-label">שטאטע<br>ניגונים</div>
                 </button>
                 <button class="category-btn btn-music" id="btn-music" onclick="startPlaying('music')">
                     <div class="play-icon">🎵</div>
@@ -801,26 +801,11 @@
         const nowPlayingTitle = document.getElementById('now-playing-title');
         const playerDiv = document.getElementById('player');
         
-        // Load all songs on startup
+        // Load all songs on startup - OPTIMIZED: only load the starting category
         window.onload = async () => {
             try {
-                await Promise.all([
-                    loadFolder('marshn'),
-                    loadFolder('lebedik'),
-                    loadFolder('shteyt'),
-                    loadFolder('music'),
-                    loadFolder('vocali'),
-                    loadFolder('shabbos'),
-                    loadFolder('motzeishabbos'),
-                    loadFolder('roshchodesh'),
-                    loadFolder('yomimnoroim'),
-                    loadFolder('sukkos'),
-                    loadFolder('chanukah'),
-                    loadFolder('purim'),
-                    loadFolder('pesach'),
-                    loadFolder('lagbomer'),
-                    loadFolder('shavuos')
-                ]);
+                // Only load the starting category
+                await loadFolder('marshn');
                 
                 // Auto-start playing algemeine kolekshn
                 startPlaying('marshn');
@@ -831,6 +816,23 @@
         };
         
         async function loadFolder(category) {
+            // Check if already loaded
+            if (allSongs[category] && allSongs[category].length > 0) {
+                return; // Already loaded, skip
+            }
+            
+            // Check localStorage cache first
+            const cacheKey = 'nigunim_' + category;
+            const cached = localStorage.getItem(cacheKey);
+            if (cached) {
+                const cacheData = JSON.parse(cached);
+                // Cache valid for 1 hour
+                if (cacheData.timestamp > Date.now() - 3600000) {
+                    allSongs[category] = cacheData.files;
+                    return;
+                }
+            }
+            
             const folderId = FOLDERS[category];
             
             try {
@@ -850,12 +852,29 @@
                 
                 allSongs[category] = audioFiles;
                 
+                // Save to localStorage cache
+                localStorage.setItem(cacheKey, JSON.stringify({
+                    timestamp: Date.now(),
+                    files: audioFiles
+                }));
+                
             } catch (error) {
                 throw error;
             }
         }
         
-        function startPlaying(category) {
+        async function startPlaying(category) {
+            // Show loading if not loaded yet
+            if (!allSongs[category] || allSongs[category].length === 0) {
+                nowPlayingTitle.textContent = 'לאָודט...';
+                try {
+                    await loadFolder(category);
+                } catch (error) {
+                    nowPlayingTitle.textContent = 'גרייז ביים לאָודן...';
+                    return;
+                }
+            }
+            
             currentCategory = category;
             currentPlaylist = [...allSongs[category]];
             
