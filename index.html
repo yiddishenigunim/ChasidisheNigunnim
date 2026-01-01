@@ -839,24 +839,25 @@
         }
         createStars();
         
-        const WORKER_URL = 'https://wstream-api.oitzerhanigunim.org';
+        const R2_BASE_URL = 'https://r2.oitzerhanigunim.org';
+        const API_URL = 'https://nigunim-api.oitzerhanigunim.org';
         
         const FOLDERS = {
-            marshn: '1PotFszkCNymW1HUAbYAq2vh8DXG5QcQr',
-            lebedik: '1uHP2MO8_v_5bdPiC7uleoaded_U2sszE',
-            shteyt: '1iGhCOrwXJhU5SRR7UpcW7e9x1_Ed8PjB',
-            music: '18T2YHKDmNw9i72xxSul8I1BqaE5DCzTZ',
-            vocali: '13kHKvjJVzKH9-qO4rNYzukhKu8TTigmc',
-            shabbos: '1Qm3Y7f_K0G71EzfFrGAVvqYhVpsP-ohw',
-            motzeishabbos: '1cIt3bNm5_agEdlPaXZrkSQBEejLPH7VC',
-            roshchodesh: '139v4ROI3xIGzt1Ny5Gebt0HRVyBt5_jR',
-            yomimnoroim: '1WtC-PPHvTmZCg8DiR9O3IrE8C2tKaDGJ',
-            sukkos: '1ykwQYHQFcdlibDii7fqKxJ0uheXsiltC',
-            chanukah: '1wbaZTZUrnpFbbrPDnqFzz2OOCBdRk4zI',
-            purim: '1OxUrexziF0PUeGoq2XuIpUTQFc1bXPqE',
-            pesach: '1Zz0f00wHtg7jnfez6JEOtQLPL-758v54',
-            lagbomer: '1LLpugKZj2r1BbILeFK1CT7CC2swN8AYn',
-            shavuos: '1Y3rjOdgFL0FQQ8nJicUoV5-zzIwNyaR2'
+            marshn: 'שיינע מארשן',
+            lebedik: 'לעבעדיג',
+            shteyt: 'שטייטע',
+            music: 'בלויז מוזיק',
+            vocali: 'מועדים וזמנים/ספירה',
+            shabbos: 'מועדים וזמנים/ניגוני שבק',
+            motzeishabbos: 'מועדים וזמנים/מוצאי שב_ק',
+            roshchodesh: 'מועדים וזמנים/ראש חודש',
+            yomimnoroim: 'מועדים וזמנים/ימים נוראים',
+            sukkos: 'מועדים וזמנים/סוכות',
+            chanukah: 'מועדים וזמנים/חנוכה',
+            purim: 'מועדים וזמנים/פורים',
+            pesach: 'מועדים וזמנים/פסח',
+            lagbomer: 'מועדים וזמנים/ל_ג בעומר',
+            shavuos: 'מועדים וזמנים/שבועות'
         };
         
         let allSongs = {
@@ -908,7 +909,7 @@
             }
             
             // Check localStorage cache first
-            const cacheKey = 'nigunim_' + category;
+            const cacheKey = 'nigunim_r2_' + category;
             const cached = localStorage.getItem(cacheKey);
             if (cached) {
                 const cacheData = JSON.parse(cached);
@@ -919,18 +920,10 @@
                 }
             }
             
-            const folderId = FOLDERS[category];
+            const folderPath = FOLDERS[category];
             
             try {
-                const url = `${WORKER_URL}?action=list&folderId=${folderId}`;
-                
-                const response = await fetch(url);
-                
-                // Check for rate limit or server overload
-                if (response.status === 429 || response.status === 503 || response.status === 1027) {
-                    showErrorMessage();
-                    throw new Error('Rate limited');
-                }
+                const response = await fetch(`${API_URL}/?folder=${encodeURIComponent(folderPath)}`);
                 
                 if (!response.ok) {
                     showErrorMessage();
@@ -940,20 +933,20 @@
                 const data = await response.json();
                 
                 if (data.error) {
-                    throw new Error(data.error.message);
+                    throw new Error(data.error);
                 }
                 
-                const audioFiles = data.files.filter(file => 
-                    file.mimeType.includes('audio') || 
-                    file.name.match(/\.(mp3|wav|ogg|m4a|flac|aac|wma)$/i)
-                );
+                const songs = data.files.map(file => ({
+                    name: file.name,
+                    url: `${R2_BASE_URL}/${encodeURIComponent(file.key).replace(/%2F/g, '/')}`
+                }));
                 
-                allSongs[category] = audioFiles;
+                allSongs[category] = songs;
                 
                 // Save to localStorage cache
                 localStorage.setItem(cacheKey, JSON.stringify({
                     timestamp: Date.now(),
-                    files: audioFiles
+                    files: songs
                 }));
                 
             } catch (error) {
@@ -1068,7 +1061,7 @@
             if (currentPlaylist.length === 0) return;
             
             const track = currentPlaylist[currentIndex];
-            const streamUrl = `${WORKER_URL}?action=stream&fileId=${track.id}`;
+            const streamUrl = track.url;
             
             // Increment track ID to handle race conditions
             currentTrackId++;
@@ -1114,7 +1107,8 @@
                         }
                     } else {
                         // No ID3 title, show filename
-                        nowPlayingTitle.textContent = track.name.replace(/\.[^/.]+$/, "");
+                        const displayName = decodeURIComponent(track.name).replace(/\.[^/.]+$/, "");
+                        nowPlayingTitle.textContent = displayName;
                     }
                 },
                 onError: function(error) {
@@ -1122,7 +1116,8 @@
                     if (thisTrackId !== currentTrackId) return;
                     
                     // Show filename if ID3 reading fails
-                    nowPlayingTitle.textContent = track.name.replace(/\.[^/.]+$/, "");
+                    const displayName = decodeURIComponent(track.name).replace(/\.[^/.]+$/, "");
+                    nowPlayingTitle.textContent = displayName;
                 }
             });
         }
